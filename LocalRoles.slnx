@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LocalRoles.Functions/LocalRoles.Functions.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LocalRoles.Functions.Tests/LocalRoles.Functions.Tests.csproj" />
+  </Folder>
+</Solution>

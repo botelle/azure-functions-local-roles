@@ -1,0 +1,13 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+    "AZURE_FUNCTIONS_ENVIRONMENT": "Development"
+  },
+  "LocalPrincipal": {
+    "Enabled": true,
+    "Name": "local.developer@example.com",
+    "Roles": [ "Reader", "Admin" ]
+  }
+}
