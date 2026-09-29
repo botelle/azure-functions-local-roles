@@ -2,7 +2,8 @@ namespace LocalRoles.Functions.Auth;
 
 /// <summary>
 /// Header names App Service Authentication sets on every authenticated request.
-/// The platform strips any client-supplied copies before they reach the app.
+/// The platform strips client-supplied copies only while App Service Authentication
+/// is enabled on the app. Anywhere else, any caller can set them.
 /// </summary>
 public static class ClientPrincipalHeaders
 {

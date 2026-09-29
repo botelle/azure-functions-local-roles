@@ -8,6 +8,8 @@ namespace LocalRoles.Functions.Auth;
 /// Reads the caller's identity from the headers App Service Authentication sets.
 /// This is the only code the functions use to decide who is calling. It does not
 /// know or care whether the headers came from Azure or from the local override.
+/// Only trustworthy behind App Service Authentication, which strips forged copies;
+/// see the README.
 /// </summary>
 public static class HttpRequestExtensions
 {
@@ -28,7 +30,10 @@ public static class HttpRequestExtensions
             return null;
         }
 
-        var claims = payload?.Claims ?? [];
+        // Deserialization does not enforce non-null members, so drop incomplete claims.
+        var claims = (payload?.Claims ?? [])
+            .Where(c => c?.Type is not null && c.Value is not null)
+            .ToArray();
         var roleType = payload?.RoleType ?? ClientPrincipalHeaders.DefaultRoleType;
         var nameType = payload?.NameType ?? ClientPrincipalHeaders.DefaultNameType;
 

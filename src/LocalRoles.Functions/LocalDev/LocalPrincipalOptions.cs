@@ -20,6 +20,17 @@ public sealed class LocalPrincipalOptions
 
     public List<string> Roles { get; set; } = [];
 
-    /// <summary>Any extra claims to include, as claim type → value.</summary>
-    public Dictionary<string, string> Claims { get; set; } = [];
+    /// <summary>
+    /// Extra claims. A list of objects rather than a type → value map, because
+    /// configuration treats ':' in a key as a separator and would silently drop
+    /// URI claim types such as http://schemas.microsoft.com/identity/claims/objectidentifier.
+    /// </summary>
+    public List<LocalClaim> Claims { get; set; } = [];
+}
+
+public sealed class LocalClaim
+{
+    public string Type { get; set; } = "";
+
+    public string Value { get; set; } = "";
 }

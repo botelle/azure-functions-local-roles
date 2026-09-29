@@ -71,7 +71,31 @@ public class HttpRequestExtensionsTests
     }
 
     [Theory]
+    [InlineData("""{"claims":[null,{"typ":"roles","val":"Admin"}]}""")]
+    [InlineData("""{"claims":[{"typ":null,"val":"x"},{"typ":"roles"},{"typ":"roles","val":"Admin"}]}""")]
+    public void Incomplete_claims_are_skipped_not_thrown(string json)
+    {
+        var principal = Request((ClientPrincipalHeaders.Principal, Base64(json))).GetClientPrincipal();
+
+        Assert.NotNull(principal);
+        Assert.Equal(["Admin"], principal.Roles);
+        Assert.All(principal.Claims, c => Assert.NotNull(c.Type));
+    }
+
+    [Fact]
+    public void Empty_role_type_grants_no_roles()
+    {
+        var payload = Base64("""{"role_typ":"","claims":[{"typ":"roles","val":"Admin"}]}""");
+
+        var principal = Request((ClientPrincipalHeaders.Principal, payload)).GetClientPrincipal();
+
+        Assert.NotNull(principal);
+        Assert.Empty(principal.Roles);
+    }
+
+    [Theory]
     [InlineData("not base64!")]
+    [InlineData("eyJjbGFpbXMiOnsidHlwIjoicm9sZXMifX0=")] // {"claims":{"typ":"roles"}}
     [InlineData("bm90IGpzb24=")] // "not json"
     public void Malformed_payload_grants_no_roles(string payload)
     {

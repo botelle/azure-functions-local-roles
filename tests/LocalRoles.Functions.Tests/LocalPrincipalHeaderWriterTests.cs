@@ -16,7 +16,11 @@ public class LocalPrincipalHeaderWriterTests
             Id = "id-1",
             IdentityProvider = "aad",
             Roles = ["Reader", "Admin", " "],
-            Claims = { ["tid"] = "tenant-1" },
+            Claims =
+            [
+                new() { Type = "tid", Value = "tenant-1" },
+                new() { Type = "http://schemas.microsoft.com/identity/claims/objectidentifier", Value = "oid-1" },
+            ],
         };
 
         Assert.True(LocalPrincipalHeaderWriter.TryWrite(request.Headers, options));
@@ -28,6 +32,7 @@ public class LocalPrincipalHeaderWriterTests
         Assert.Equal("aad", principal.IdentityProvider);
         Assert.Equal(["Reader", "Admin"], principal.Roles);
         Assert.Contains(principal.Claims, c => c is { Type: "tid", Value: "tenant-1" });
+        Assert.Contains(principal.Claims, c => c is { Type: "http://schemas.microsoft.com/identity/claims/objectidentifier", Value: "oid-1" });
     }
 
     [Fact]

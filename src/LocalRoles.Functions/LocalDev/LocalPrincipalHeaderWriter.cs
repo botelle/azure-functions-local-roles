@@ -27,7 +27,9 @@ internal static class LocalPrincipalHeaderWriter
         {
             new(ClientPrincipalHeaders.DefaultNameType, options.Name),
         };
-        claims.AddRange(options.Claims.Select(c => new ClientPrincipalClaim(c.Key, c.Value)));
+        claims.AddRange(options.Claims
+            .Where(c => !string.IsNullOrWhiteSpace(c.Type))
+            .Select(c => new ClientPrincipalClaim(c.Type, c.Value)));
         claims.AddRange(options.Roles
             .Where(r => !string.IsNullOrWhiteSpace(r))
             .Select(r => new ClientPrincipalClaim(ClientPrincipalHeaders.DefaultRoleType, r)));

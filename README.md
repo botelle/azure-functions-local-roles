@@ -28,6 +28,8 @@ A worker middleware runs before each function. It writes the same headers Easy A
 
 The functions, and the `HttpRequest` extension that reads the headers, are unchanged. They can't tell a local request from a real one, so the code that runs locally is the code that runs in production. Nothing fakes the parsing step.
 
+> **Only trust these headers behind App Service Authentication.** App Service strips client-sent `X-MS-CLIENT-PRINCIPAL*` headers only while its authentication is turned on for the app. Without it, whether that's Easy Auth switched off, self-hosted Docker, Kubernetes, or Container Apps without built-in auth, any caller can send `X-MS-CLIENT-PRINCIPAL` with an `Admin` role and the reader will believe it. This sample's endpoints are `AuthorizationLevel.Anonymous` for that reason: in Azure they rely on the platform to have authenticated the caller already.
+
 Because the middleware sits in front of every function, the functions never mention it. That makes it the closest thing Functions has to an AOP interceptor.
 
 ## Try it
@@ -58,24 +60,31 @@ Edit the roles and save. The next request picks them up; you don't need to resta
 | `Id` | all-zero GUID | `X-MS-CLIENT-PRINCIPAL-ID`. |
 | `IdentityProvider` | `aad` | `X-MS-CLIENT-PRINCIPAL-IDP` and `auth_typ`. |
 | `Roles` | empty | One `roles` claim each. Empty means signed in with no roles. |
-| `Claims` | empty | Extra claims as `"type": "value"`, e.g. `{ "tid": "..." }`. |
+| `Claims` | empty | Extra claims as a list of `{ "Type": ..., "Value": ... }`. A list rather than a map, because configuration reads `:` in a key as a separator and would silently drop URI claim types. |
 
 If a request already carries any `X-MS-CLIENT-PRINCIPAL*` header, the middleware leaves it alone. You can still test one-off identities with `curl -H`.
 
-## Why it can't switch on in Azure
+## Keeping it off outside local development
 
-The override is off everywhere except under Core Tools on a developer machine. Four separate things keep it that way:
+`UseLocalPrincipal()` adds the middleware only when all three of these are true of the **process environment**:
 
-1. **Registration is gated.** `UseLocalPrincipal()` adds the middleware only when `AZURE_FUNCTIONS_ENVIRONMENT` is `Development` and none of the variables App Service sets on a real instance (`WEBSITE_INSTANCE_ID`, `WEBSITE_SITE_NAME`, `CONTAINER_NAME`) are present. In Azure the middleware is never in the pipeline.
-2. **The settings file is never deployed.** `func azure functionapp publish` and `dotnet publish` both leave out `local.settings.json`, so the `LocalPrincipal` section doesn't exist in Azure.
-3. **The settings file is git-ignored.** Each developer's roles stay on their own machine, and nobody's roles get committed.
-4. **Azure strips spoofed headers.** With authentication enabled, App Service removes any client-sent `X-MS-CLIENT-PRINCIPAL*` headers before the request reaches the app. So the rule that caller-supplied headers win gives nothing away in Azure.
+- `FUNCTIONS_CORETOOLS_ENVIRONMENT` is `true`. Core Tools sets this on the worker it launches. It's a positive signal that `func start` is running, not just the absence of Azure signals.
+- `AZURE_FUNCTIONS_ENVIRONMENT` is `Development`.
+- None of `WEBSITE_INSTANCE_ID`, `WEBSITE_SITE_NAME`, `CONTAINER_NAME` or `KUBERNETES_SERVICE_HOST` is set. Those cover App Service and Functions plans, Container Apps, and any Kubernetes pod.
 
-Core Tools always sets `AZURE_FUNCTIONS_ENVIRONMENT=Development` and overrides anything in `Values`. You can't test guard 1 by changing that value. Setting `WEBSITE_SITE_NAME` in `Values` does turn the override off, and makes a good local check that the guard is wired up.
+Otherwise the middleware is never in the pipeline, whatever the configuration says. The check deliberately ignores `IConfiguration`: `local.settings.json` is itself a configuration source, and reading configuration would let keys in that file blank out the hosted markers.
+
+Other things help too, but none of them is the guard:
+
+- **`publish` leaves the settings file out.** The Worker SDK marks `local.settings.json` `CopyToPublishDirectory="Never"`. A plain `dotnet build` does still copy it into `bin/`, so a pipeline that ships build output rather than publish output carries it along. The gate above is what makes that harmless.
+- **The settings file is git-ignored.** Each developer's roles stay on their own machine, and nobody's roles get committed.
+- **Caller-supplied headers win only locally.** In Azure behind App Service Authentication, the platform has already stripped them. Anywhere else, see the warning above.
+
+Core Tools always sets `AZURE_FUNCTIONS_ENVIRONMENT=Development` and overrides anything in `Values`, so that setting is not an off switch. Values do reach the worker as environment variables, so setting `WEBSITE_SITE_NAME` in `Values` turns the override off. That makes a good local check that the gate is wired up.
 
 ## Two things that catch people out
 
-**`reloadOnChange` on `local.settings.json` watches the wrong file.** Core Tools runs the worker from `bin/output`, so `AddJsonFile("local.settings.json", reloadOnChange: true)` watches the copy made at build time. Your edits land on the next build, not on save. `AddLocalSettingsJson()` fixes that in Debug builds. MSBuild bakes the project directory into the assembly as `AssemblyMetadata`, and the app watches that file instead. Release builds carry no path and fall back to the relative one. It loads exactly one file, never both. If both were loaded, removing the section from one would leave a stale copy active in the other.
+**`reloadOnChange` on `local.settings.json` watches the wrong file.** Core Tools runs the worker from `bin/output`, so `AddJsonFile("local.settings.json", reloadOnChange: true)` watches the copy made at build time. Your edits land on the next build, not on save. `AddLocalSettingsJson()` fixes that in Debug builds. MSBuild bakes the project directory into the assembly as `AssemblyMetadata`, and the app watches that file instead. Release builds carry no path and fall back to the relative one. The catch is that a Debug build's assembly contains your absolute project path, so don't ship Debug builds. It loads exactly one file, never both. If both were loaded, removing the section from one would leave a stale copy active in the other.
 
 **Routes starting with `admin` are reserved** by the Functions host, which is why the role-gated endpoint here is `/api/reports`.
 
